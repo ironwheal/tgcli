@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from importlib.metadata import version
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -77,7 +78,13 @@ class TestCreateClient:
 
         mock_load.assert_called_once_with(store="file")
         mock_ss.assert_called_once_with("session_str")
-        mock_tc.assert_called_once_with(mock_ss.return_value, 123, "abc")
+        mock_tc.assert_called_once_with(
+            mock_ss.return_value,
+            123,
+            "abc",
+            device_model="tgcli",
+            app_version=version("pytgcli"),
+        )
 
 
 class TestResolveEntity:

@@ -9,6 +9,7 @@ import zipfile
 from collections.abc import Callable
 from datetime import datetime
 from difflib import get_close_matches
+from importlib.metadata import version
 
 from telethon import TelegramClient
 from telethon.errors import UsernameInvalidError
@@ -67,6 +68,8 @@ def create_client(config: TelegramConfig | None = None) -> TelegramClient:
         StringSession(session_str),
         config.api_id,
         config.api_hash,
+        device_model="tgcli",
+        app_version=version("pytgcli"),
     )
 
 
