@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest something tgcli should do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! If tgcli is useful to you, a ⭐ on the repo helps other people find it.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you are trying to do and why tgcli can't do it today. Describe the need, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: The command, flag, or output you have in mind, if any.
+  - type: dropdown
+    id: importance
+    attributes:
+      label: How much it matters
+      options:
+        - I can't use tgcli for my use case without it
+        - It would save me real time
+        - Nice to have
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: How you use tgcli (by hand, from an AI agent, in scripts), and any workaround you use now.

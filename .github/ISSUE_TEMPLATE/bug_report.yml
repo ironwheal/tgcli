@@ -1,0 +1,86 @@
+name: Bug report
+description: Something in tgcli doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! If tgcli is useful to you, a ⭐ on the repo helps other people find it.
+
+        tgcli doesn't accept pull requests. A precise report is the fastest way to a fix.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what happened instead.
+      placeholder: |
+        I ran `tg auth login`, entered my phone number, and the verification code never arrived.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands, in order. Replace chat names and IDs with placeholders if they are private.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The full output, including errors on stderr. Leave out QR codes (as text or screenshots) and tg://login URLs, and remove phone numbers, session strings, API hashes, verification codes, passwords and message contents.
+      render: text
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Blocks me completely (can't log in or use tgcli at all)
+        - One command or feature is broken, others work
+        - Wrong or confusing output, with a workaround
+        - Minor annoyance
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: tgcli version
+      description: Output of `tg --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - uv tool install
+        - Homebrew
+        - pip / pipx
+        - From source
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS and Python version
+      placeholder: macOS 26.1, Python 3.13
+    validations:
+      required: true
+  - type: dropdown
+    id: host
+    attributes:
+      label: Where tgcli runs
+      description: Telegram treats datacenter IPs differently from home connections.
+      options:
+        - Personal computer on a home or office network
+        - VPS or cloud server
+        - CI or container
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Session store (file or keychain), whether 2FA is on, proxies or VPNs, and anything you already tried.
