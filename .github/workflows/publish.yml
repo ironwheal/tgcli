@@ -98,56 +98,18 @@ jobs:
           owner: tksohishi
           repositories: homebrew-tap
 
-      - name: Resolve PyPI source artifact
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: Update formula in tap repo
         env:
           VERSION: ${{ github.ref_name }}
         run: |
-          export TAG_VERSION="${VERSION#v}"
-          python3 <<'PY'
-          import json
-          import os
-          import urllib.request
-
-          version = os.environ["TAG_VERSION"]
-          url = f"https://pypi.org/pypi/pytgcli/{version}/json"
-          with urllib.request.urlopen(url) as response:
-            data = json.load(response)
-
-          sdist = next(item for item in data["urls"] if item["packagetype"] == "sdist")
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
-            env_file.write(f"TGCLI_VERSION={version}\n")
-            env_file.write(f"TGCLI_SDIST_URL={sdist['url']}\n")
-            env_file.write(f"TGCLI_SDIST_SHA256={sdist['digests']['sha256']}\n")
-          PY
-
-      - name: Update formula in tap repo
-        run: |
+          echo "TGCLI_VERSION=${VERSION#v}" >> "$GITHUB_ENV"
           git clone "https://x-access-token:${{ steps.tap-token.outputs.token }}@github.com/${TAP_REPO}.git" tap-repo
-          python3 <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          formula_path = Path("tap-repo/Formula/tgcli.rb")
-          content = formula_path.read_text(encoding="utf-8")
-          content, url_replacements = re.subn(
-            r'^  url ".*"$',
-            f'  url "{os.environ["TGCLI_SDIST_URL"]}"',
-            content,
-            count=1,
-            flags=re.MULTILINE,
-          )
-          content, sha_replacements = re.subn(
-            r'^  sha256 ".*"$',
-            f'  sha256 "{os.environ["TGCLI_SDIST_SHA256"]}"',
-            content,
-            count=1,
-            flags=re.MULTILINE,
-          )
-          if url_replacements != 1 or sha_replacements != 1:
-            raise RuntimeError("Failed to patch tgcli.rb top-level url/sha256")
-          formula_path.write_text(content, encoding="utf-8")
-          PY
+          python3 scripts/update_homebrew_formula.py "${VERSION#v}" tap-repo/Formula/tgcli.rb
 
       - name: Commit and push formula update
         run: |
