@@ -8,6 +8,7 @@ Give AI agents (Claude Code, Codex, Cursor, etc.) direct access to your Telegram
 - **Minimal surface** — a handful of commands; easy for agents to discover and invoke
 - **Chat name resolution**: exact display names take priority; a unique substring also matches
 - **`--pretty` for humans** — Rich tables when you want to read output yourself
+- **QR login**: authorize by scanning a code from a device that is already logged in, for when Telegram never delivers a verification code
 - **Agent-friendly session storage** — Telethon session key stored in a local `0600` file by default; keychain remains available as a legacy option
 
 ## Installation
@@ -50,7 +51,7 @@ Create a Telegram API app at [my.telegram.org/apps](https://my.telegram.org/apps
 tg auth
 ```
 
-This walks you through setup: saves your API credentials to `~/.config/tgcli/config.toml`, then logs in with phone number + verification code. The Telegram session is stored at `~/.config/tgcli/session` by default.
+This walks you through setup: saves your API credentials to `~/.config/tgcli/config.toml`, then logs you in by QR code (scanned from a device where you are already logged in) or by phone number + verification code. If the verification code never arrives, which Telegram does for some IP ranges such as VPS hosts, use the QR method. The Telegram session is stored at `~/.config/tgcli/session` by default.
 
 ### 3. Read Messages
 
@@ -108,10 +109,19 @@ Smart entrypoint: creates config if missing, logs in if needed, shows status if 
 
 Explicit subcommands:
 
+- `tg auth qr` - log in by scanning a QR code in Telegram > Settings > Devices > Link Desktop Device
 - `tg auth login` - interactive login (phone + code/2FA)
 - `tg auth logout` - remove the local session
 - `tg auth migrate-session` - copy a legacy keychain session to the local session file
 - `tg auth status` - show auth state
+
+#### `tg auth qr`
+
+Prints a QR code to stderr, plus a `tg://login` URL you can open instead if Telegram Desktop runs on the same machine. The code refreshes whenever it expires, until it is scanned or `--timeout` runs out. Accounts with Two-Step Verification are asked for that password after the scan, with up to 3 tries.
+
+| Flag        | Description                                               |
+|-------------|-----------------------------------------------------------|
+| `--timeout` | Seconds to wait for a scan before giving up (default 300) |
 
 ### `tg chats`
 

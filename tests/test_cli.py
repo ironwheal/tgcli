@@ -31,6 +31,78 @@ class TestAuthLogin:
         assert result.exit_code == 1
 
 
+class TestAuthQr:
+    @patch("tgcli.auth.login_qr", new_callable=AsyncMock)
+    def test_qr_success(self, mock_qr):
+        result = runner.invoke(app, ["auth", "qr"])
+
+        assert result.exit_code == 0
+        assert "Login successful" in result.output
+
+    @patch(
+        "tgcli.auth.login_qr",
+        new_callable=AsyncMock,
+        side_effect=TimeoutError("No device scanned the QR code within 300s."),
+    )
+    def test_qr_timeout(self, mock_qr):
+        result = runner.invoke(app, ["auth", "qr"])
+
+        assert result.exit_code == 1
+        assert "No device scanned" in result.output
+
+    @patch("tgcli.auth.login_qr", new_callable=AsyncMock, side_effect=KeyboardInterrupt)
+    def test_qr_ctrl_c_exits_1(self, mock_qr):
+        result = runner.invoke(app, ["auth", "qr"])
+
+        assert result.exit_code == 1
+        assert "Aborted" in result.output
+
+    def test_qr_code_and_url_go_to_stderr_only(self):
+        url = "tg://login?token=AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+        async def fake_login_qr(on_url, password, timeout):
+            on_url(url)
+
+        with patch("tgcli.auth.login_qr", fake_login_qr):
+            result = runner.invoke(app, ["auth", "qr"])
+
+        assert result.exit_code == 0
+        assert url in result.stderr
+        assert "█" in result.stderr
+        assert url not in result.stdout
+
+    @patch("tgcli.auth.login_qr", new_callable=AsyncMock)
+    def test_qr_timeout_flag_is_passed_through(self, mock_qr):
+        result = runner.invoke(app, ["auth", "qr", "--timeout", "60"])
+
+        assert result.exit_code == 0
+        assert mock_qr.await_args.kwargs["timeout"] == 60
+
+    def test_qr_announces_a_fresh_code(self):
+        async def fake_login_qr(on_url, password, timeout):
+            on_url("tg://login?token=a")
+            on_url("tg://login?token=b")
+
+        with patch("tgcli.auth.login_qr", fake_login_qr):
+            result = runner.invoke(app, ["auth", "qr"])
+
+        assert result.stderr.count("Code expired. Fresh code") == 1
+
+    def test_qr_shows_password_hint_once(self):
+        async def fake_login_qr(on_url, password, timeout):
+            password("dog's name")
+            password("dog's name")
+
+        with (
+            patch("tgcli.auth.login_qr", fake_login_qr),
+            patch("getpass.getpass", return_value="pw"),
+        ):
+            result = runner.invoke(app, ["auth", "qr"])
+
+        assert result.stderr.count("Password hint: dog's name") == 1
+        assert "Wrong password. 2 attempt(s) left." in result.stderr
+
+
 class TestAuthLogout:
     @patch("tgcli.auth.logout", new_callable=AsyncMock)
     def test_logout_success(self, mock_logout):
@@ -154,11 +226,28 @@ class TestAuthSmart:
             "session_exists": False,
             "session_store": "file",
         }
-        result = runner.invoke(app, ["auth"])
+        result = runner.invoke(app, ["auth"], input="phone\n")
 
         assert result.exit_code == 0
         assert "Login successful" in result.output
         mock_login.assert_awaited_once()
+
+    @patch("tgcli.auth.login_qr", new_callable=AsyncMock)
+    @patch("tgcli.auth.get_status", new_callable=AsyncMock)
+    @patch("tgcli.config.load_config")
+    def test_auth_not_logged_in_defaults_to_qr(self, mock_load, mock_status, mock_qr):
+        mock_load.return_value = MagicMock()
+        mock_status.return_value = {
+            "authenticated": False,
+            "phone": None,
+            "session_exists": False,
+            "session_store": "file",
+        }
+        result = runner.invoke(app, ["auth"], input="\n")
+
+        assert result.exit_code == 0
+        assert "Login successful" in result.output
+        mock_qr.assert_awaited_once()
 
     @patch("webbrowser.open")
     @patch("tgcli.auth.login", new_callable=AsyncMock)
@@ -178,8 +267,8 @@ class TestAuthSmart:
             "session_exists": False,
             "session_store": "file",
         }
-        # Input: Enter to open browser, api_id, api_hash
-        result = runner.invoke(app, ["auth"], input="\n123456\nabc123\n")
+        # Input: Enter to open browser, api_id, api_hash, phone login method
+        result = runner.invoke(app, ["auth"], input="\n123456\nabc123\n2\n")
 
         assert result.exit_code == 0
         mock_write.assert_called_once_with(123456, "abc123")

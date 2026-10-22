@@ -11,6 +11,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from telethon.errors import UnauthorizedError
 
 
@@ -35,7 +36,11 @@ app = typer.Typer(
     )
 )
 auth_app = typer.Typer(
-    help="Manage Telegram authentication.", invoke_without_command=True
+    help=(
+        "Manage Telegram authentication.\n\n"
+        "Use `tg auth qr` when the phone verification code never arrives."
+    ),
+    invoke_without_command=True,
 )
 app.add_typer(auth_app, name="auth")
 
@@ -142,8 +147,18 @@ def auth_default(ctx: typer.Context) -> None:
         stdout.print("Run `tg auth logout` to log out.")
         return
 
-    # Step 3: not authenticated, run login
-    _run_login()
+    # Step 3: not authenticated, pick a login method
+    stderr.print("Choose a login method:")
+    stderr.print(r"  \[1] QR code, scanned from a device already logged in")
+    stderr.print(r"  \[2] Phone number + verification code")
+    method = typer.prompt("Method", default="1").strip().lower()
+    if method in {"1", "qr"}:
+        _run_qr_login()
+    elif method in {"2", "phone", "code"}:
+        _run_login()
+    else:
+        stderr.print("[red]Choose 1 or 2.[/red]")
+        raise typer.Exit(1)
 
 
 def _run_login() -> None:
@@ -163,9 +178,59 @@ def _run_login() -> None:
     except Exception as e:
         stderr.print(f"[red]Login failed:[/red] {e}")
         raise typer.Exit(1)
+    _print_login_success()
+
+
+def _run_qr_login(timeout: float = 300.0) -> None:
+    """Shared QR login flow for both `tg auth` and `tg auth qr`."""
+    from getpass import getpass
+
+    from tgcli.auth import login_qr
+    from tgcli.formatting import format_qr
+
     stderr.print(
-        "\nRegarding the ToS warning above: unofficial API clients are\n"
-        "under observation by Telegram. Normal interactive use (searching,\n"
+        "\nOn a device where you are logged in, open Telegram > Settings >\n"
+        "Devices > Link Desktop Device and scan the code below. If Telegram\n"
+        "Desktop runs on this machine, you can open the tg://login URL instead.\n"
+    )
+
+    shown = 0
+
+    def show(url: str) -> None:
+        nonlocal shown
+        if shown:
+            stderr.print("[dim]Code expired. Fresh code:[/dim]")
+        shown += 1
+        stderr.print(format_qr(url))
+        stderr.print(f"[dim]{url}[/dim]")
+        stderr.print("[dim]Waiting for a scan. Ctrl-C aborts.[/dim]")
+
+    asked = 0
+
+    def password(hint: str | None) -> str:
+        nonlocal asked
+        if asked:
+            stderr.print(f"[red]Wrong password.[/red] {3 - asked} attempt(s) left.")
+        elif hint:
+            stderr.print(f"Password hint: {escape(hint)}")
+        asked += 1
+        return getpass("Two-Step Verification password: ")
+
+    try:
+        asyncio.run(login_qr(show, password, timeout=timeout))
+    except KeyboardInterrupt:
+        stderr.print("\nAborted.")
+        raise typer.Exit(1)
+    except Exception as e:
+        stderr.print(f"[red]Login failed:[/red] {e}")
+        raise typer.Exit(1)
+    _print_login_success()
+
+
+def _print_login_success() -> None:
+    stderr.print(
+        "\nRemember Telegram's ToS: unofficial API clients are under\n"
+        "observation by Telegram. Normal interactive use (searching,\n"
         "reading your own messages) is fine. Avoid bulk scraping, spamming,\n"
         "or using results for AI/ML model training.\n"
         "Full terms: https://core.telegram.org/api/terms\n"
@@ -177,6 +242,21 @@ def _run_login() -> None:
 def login() -> None:
     """Interactive login: phone + verification code (or 2FA password)."""
     _run_login()
+
+
+@auth_app.command("qr")
+def qr(
+    timeout: Annotated[
+        float,
+        typer.Option(min=1, help="Seconds to wait for a scan before giving up."),
+    ] = 300.0,
+) -> None:
+    """Log in by scanning a QR code from a device already logged in.
+
+    Use this when the phone verification code never arrives, which Telegram
+    does for some IP ranges such as VPS hosts.
+    """
+    _run_qr_login(timeout)
 
 
 @auth_app.command()

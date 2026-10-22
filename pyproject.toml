@@ -26,6 +26,7 @@ dependencies = [
     "telethon>=1.42",
     "keyring>=25",
     "rich>=13",
+    "qrcode>=8",
 ]
 
 [project.urls]

@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
+from datetime import UTC, datetime
+
+from telethon.errors import PasswordHashInvalidError, SessionPasswordNeededError
 from telethon.sessions import StringSession
+from telethon.tl.functions.account import GetPasswordRequest
+from telethon.tl.types.auth import LoginTokenMigrateTo, LoginTokenSuccess
 
 from tgcli.client import create_client
 from tgcli.config import load_session_store
@@ -16,6 +23,63 @@ async def login() -> None:
         save_session(session_str)
     finally:
         await client.disconnect()
+
+
+async def login_qr(
+    on_url: Callable[[str], None],
+    password: Callable[[str | None], str],
+    timeout: float = 300.0,
+) -> None:
+    """QR login approved from an already authorized device. Saves the local session.
+
+    on_url is called with each tg://login URL, again whenever the token rotates.
+    password is called with the account's password hint, if it has one.
+    """
+    client = create_client()
+    try:
+        await client.connect()
+        if not await client.is_user_authorized():
+            await _wait_for_qr_scan(client, on_url, password, timeout)
+        save_session(StringSession.save(client.session))
+    finally:
+        await client.disconnect()
+
+
+async def _wait_for_qr_scan(client, on_url, password, timeout: float) -> None:
+    qr = await client.qr_login()
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            on_url(qr.url)
+            ttl = (qr.expires - datetime.now(UTC)).total_seconds()
+            remaining = deadline - time.monotonic()
+            try:
+                # recreate() returns the same token until it expires: wait out the TTL.
+                await qr.wait(timeout=max(1.0, min(ttl, remaining)))
+                return
+            except TimeoutError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"No device scanned the QR code within {timeout:.0f}s."
+                    ) from None
+            await qr.recreate()
+            # A scan that lands after wait() gave up is answered by recreate() instead.
+            # QRLogin exposes that answer only as _resp.
+            if isinstance(qr._resp, LoginTokenSuccess):
+                return
+            if isinstance(qr._resp, LoginTokenMigrateTo):
+                raise RuntimeError(
+                    "The code was scanned while it refreshed. Run `tg auth qr` again."
+                )
+    except SessionPasswordNeededError:
+        hint = (await client(GetPasswordRequest())).hint
+        for attempts_left in reversed(range(3)):
+            try:
+                await client.sign_in(password=password(hint))
+                return
+            except PasswordHashInvalidError:
+                if not attempts_left:
+                    raise
 
 
 async def logout() -> None:

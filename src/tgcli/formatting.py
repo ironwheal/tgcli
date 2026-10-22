@@ -167,3 +167,29 @@ def format_auth_status(
         output.append(f"none ({session_store})\n", style="red")
 
     return output
+
+
+_HALF_BLOCKS = {
+    (True, True): "█",
+    (True, False): "▀",
+    (False, True): "▄",
+    (False, False): " ",
+}
+
+
+def format_qr(data: str) -> Text:
+    """Render data as a terminal QR code, two module rows per line."""
+    import qrcode
+
+    qr = qrcode.QRCode(border=4, error_correction=qrcode.constants.ERROR_CORRECT_L)
+    qr.add_data(data)
+    qr.make(fit=True)
+    matrix = qr.get_matrix()
+    if len(matrix) % 2:
+        matrix.append([False] * len(matrix[0]))
+    lines = [
+        "".join(_HALF_BLOCKS[(t, b)] for t, b in zip(top, bottom, strict=True))
+        for top, bottom in zip(matrix[::2], matrix[1::2], strict=True)
+    ]
+    # Pinned colors: dark themes would otherwise invert the code, which scanners reject.
+    return Text("\n".join(lines), style="black on white")

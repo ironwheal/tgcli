@@ -11,6 +11,7 @@ from tgcli.formatting import (
     format_chat_jsonl,
     format_context,
     format_message_jsonl,
+    format_qr,
     format_search_results,
 )
 
@@ -167,3 +168,47 @@ class TestFormatAuthStatus:
 
         assert "not authenticated" in output
         assert "none (file)" in output
+
+
+class TestFormatQr:
+    def test_login_url_fits_80x24(self):
+        lines = format_qr("tg://login?token=" + "A" * 43).plain.split("\n")
+
+        assert len(lines) <= 21
+        assert all(len(line) == len(lines[0]) <= 80 for line in lines)
+        assert set("".join(lines)) <= set("█▀▄ ")
+
+    def test_pinned_black_on_white(self):
+        assert str(format_qr("x").style) == "black on white"
+
+    def test_round_trips_the_module_matrix(self):
+        import qrcode
+
+        url = "tg://login?token=" + "A" * 43
+        reference = qrcode.QRCode(
+            border=4, error_correction=qrcode.constants.ERROR_CORRECT_L
+        )
+        reference.add_data(url)
+        reference.make(fit=True)
+        expected = reference.get_matrix()
+        unmap = {
+            "█": (True, True),
+            "▀": (True, False),
+            "▄": (False, True),
+            " ": (False, False),
+        }
+
+        rows = []
+        for line in format_qr(url).plain.split("\n"):
+            pairs = [unmap[char] for char in line]
+            rows.append([top for top, _ in pairs])
+            rows.append([bottom for _, bottom in pairs])
+
+        assert rows[: len(expected)] == expected
+        assert rows[len(expected) :] in ([], [[False] * len(expected[0])])
+
+    def test_keeps_a_quiet_zone(self):
+        lines = format_qr("tg://login?token=" + "A" * 43).plain.split("\n")
+
+        assert lines[0].strip() == lines[-1].strip() == ""
+        assert all(line.startswith("    ") and line.endswith("    ") for line in lines)
