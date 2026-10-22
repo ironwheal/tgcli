@@ -67,10 +67,11 @@ def _mock_msg(
 
 
 class TestCreateClient:
+    @patch("tgcli.client.platform.node", return_value="MBP.local")
     @patch("tgcli.client.load_session", return_value="session_str")
     @patch("tgcli.client.StringSession")
     @patch("tgcli.client.TelegramClient")
-    def test_creates_client_with_config(self, mock_tc, mock_ss, mock_load):
+    def test_creates_client_with_config(self, mock_tc, mock_ss, mock_load, mock_node):
         from tgcli.config import TelegramConfig
 
         cfg = TelegramConfig(api_id=123, api_hash="abc")
@@ -82,7 +83,7 @@ class TestCreateClient:
             mock_ss.return_value,
             123,
             "abc",
-            device_model="tgcli",
+            device_model="MBP",
             app_version=version("pytgcli"),
         )
 

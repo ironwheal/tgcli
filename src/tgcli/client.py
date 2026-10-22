@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import re
 import shutil
 import sys
@@ -68,7 +69,7 @@ def create_client(config: TelegramConfig | None = None) -> TelegramClient:
         StringSession(session_str),
         config.api_id,
         config.api_hash,
-        device_model="tgcli",
+        device_model=platform.node().removesuffix(".local") or None,
         app_version=version("pytgcli"),
     )
 
